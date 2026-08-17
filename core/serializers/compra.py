@@ -40,7 +40,6 @@ class CompraCreateUpdateSerializer(ModelSerializer):
     usuario = HiddenField(default=CurrentUserDefault())
     itens = ItensCompraCreateUpdateSerializer(many=True)
 
-
     class Meta:
         model = Compra
         fields = ('id', 'usuario', 'itens')
