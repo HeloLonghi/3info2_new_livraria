@@ -1,9 +1,11 @@
+from django.db import transaction
 from rest_framework.serializers import (
     CharField,
     CurrentUserDefault,
     HiddenField,
     ModelSerializer,
     SerializerMethodField,
+    ValidationError,
 )
 
 from core.models import Compra, ItensCompra
@@ -13,6 +15,16 @@ class ItensCompraCreateUpdateSerializer(ModelSerializer):
     class Meta:
         model = ItensCompra
         fields = ('livro', 'quantidade')
+
+    def validate_quantidade(self, quantidade):
+        if quantidade <= 0:
+            raise ValidationError('A quantidade deve ser maior do que zero.')
+        return quantidade
+
+    def validate(self, item):
+        if item['quantidade'] > item['livro'].quantidade:
+            raise ValidationError('Quantidade de itens maior do que a quantidade em estoque.')
+        return item
 
 
 class ItensCompraListSerializer(ModelSerializer):
@@ -28,10 +40,12 @@ class CompraCreateUpdateSerializer(ModelSerializer):
     usuario = HiddenField(default=CurrentUserDefault())
     itens = ItensCompraCreateUpdateSerializer(many=True)
 
+
     class Meta:
         model = Compra
         fields = ('id', 'usuario', 'itens')
 
+    @transaction.atomic
     def create(self, validated_data):
         itens_data = validated_data.pop('itens')
         compra = Compra.objects.create(**validated_data)
@@ -40,9 +54,10 @@ class CompraCreateUpdateSerializer(ModelSerializer):
         compra.save()
         return compra
 
+    @transaction.atomic
     def update(self, compra, validated_data):
-        itens_data = validated_data.pop('itens', [])
-        if itens_data:
+        itens_data = validated_data.pop('itens', None)
+        if itens_data is not None:
             compra.itens.all().delete()
             for item_data in itens_data:
                 ItensCompra.objects.create(compra=compra, **item_data)
